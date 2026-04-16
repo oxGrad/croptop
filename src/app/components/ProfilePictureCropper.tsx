@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Cropper from 'react-easy-crop'
-import { Download, RefreshCw, ZoomIn, MoveHorizontal, MoveVertical, Circle, Square, Upload } from 'lucide-react'
+import { Download, RefreshCw, ZoomIn, MoveHorizontal, MoveVertical, Circle, Square, Upload, Scissors, Loader2 } from 'lucide-react'
 import getCroppedImg from '../utils/cropImage'
+import { removeBg } from '../utils/removeBackground'
 
 // Example image
 import exampleImage from '@/assets/c8016b9499cdb8ec6033063ed0df16505e22fbc6.png'
@@ -14,6 +15,8 @@ export function ProfilePictureCropper() {
   const [cropShape, setCropShape] = useState<'round' | 'rect'>('round')
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
   const [croppedImage, setCroppedImage] = useState<string | null>(null)
+  const [removeBgEnabled, setRemoveBgEnabled] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,21 +41,28 @@ export function ProfilePictureCropper() {
 
     const updatePreview = async () => {
       try {
-        const croppedImageBase64 = await getCroppedImg(
-          image,
-          croppedAreaPixels,
-          rotation
-        )
-        if (croppedImageBase64) {
-          setCroppedImage(croppedImageBase64)
+        let result = await getCroppedImg(image, croppedAreaPixels, rotation)
+        if (!result) return
+
+        if (removeBgEnabled) {
+          setIsProcessing(true)
+          try {
+            result = await removeBg(result)
+          } catch (e) {
+            console.error('Background removal failed:', e)
+          } finally {
+            setIsProcessing(false)
+          }
         }
+
+        setCroppedImage(result)
       } catch (e) {
         console.error(e)
       }
     }
 
     updatePreview()
-  }, [croppedAreaPixels, rotation, image])
+  }, [croppedAreaPixels, rotation, image, removeBgEnabled])
 
   const handleDownload = async () => {
     if (!croppedImage) return;
@@ -127,6 +137,20 @@ export function ProfilePictureCropper() {
                   <Square className="w-4 h-4" /> Square
                 </button>
               </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-neutral-50 p-3 rounded-2xl border border-neutral-100 gap-3">
+              <div className="ml-2">
+                <span className="text-sm font-semibold text-neutral-700">Remove Background</span>
+                <p className="text-xs text-neutral-400 mt-0.5">AI-powered, runs in your browser</p>
+              </div>
+              <button
+                onClick={() => setRemoveBgEnabled(v => !v)}
+                className={`flex items-center gap-2 py-2 px-4 text-sm font-medium rounded-xl border transition-colors ${removeBgEnabled ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300 hover:text-neutral-800'}`}
+              >
+                <Scissors className="w-4 h-4" />
+                {removeBgEnabled ? 'Enabled' : 'Enable'}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -229,11 +253,11 @@ export function ProfilePictureCropper() {
             
             <button
             onClick={handleDownload}
-            disabled={!croppedImage}
+            disabled={!croppedImage || isProcessing}
             className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white font-semibold rounded-2xl transition-all shadow-sm hover:shadow-md"
             >
-            <Download className="w-5 h-5" />
-            Download Perfect Crop
+            {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+            {isProcessing ? 'Removing Background…' : 'Download Perfect Crop'}
             </button>
           </div>
         </div>
@@ -255,7 +279,11 @@ export function ProfilePictureCropper() {
                         </div>
                         <div className="px-4 pb-4 pt-10 relative flex flex-col items-center text-center">
                              <div className={`absolute -top-12 w-24 h-24 ${cropShape === 'round' ? 'rounded-full' : 'rounded-xl'} overflow-hidden border-4 border-white bg-white shadow-md flex items-center justify-center z-10 transition-all duration-300`}>
-                                {croppedImage ? (
+                                {isProcessing ? (
+                                    <div className="w-full h-full bg-neutral-100 flex items-center justify-center">
+                                        <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                                    </div>
+                                ) : croppedImage ? (
                                     <img src={croppedImage} alt="LinkedIn Preview" className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="text-neutral-400 text-xs text-center p-4">Loading</div>
@@ -274,7 +302,11 @@ export function ProfilePictureCropper() {
                 <div className="flex flex-col items-center gap-4 w-full">
                     <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-neutral-200 w-full">
                         <div className={`w-16 h-16 ${cropShape === 'round' ? 'rounded-full' : 'rounded-lg'} overflow-hidden border border-neutral-200 bg-white flex items-center justify-center shrink-0 transition-all duration-300`}>
-                            {croppedImage ? (
+                            {isProcessing ? (
+                                <div className="w-full h-full bg-neutral-100 flex items-center justify-center">
+                                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                                </div>
+                            ) : croppedImage ? (
                                 <img src={croppedImage} alt="GitHub Preview" className="w-full h-full object-cover" />
                             ) : (
                                 <div className="text-neutral-400 text-[10px] text-center p-2">Loading</div>
